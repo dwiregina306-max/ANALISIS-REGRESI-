@@ -34,4 +34,24 @@ ui <- page_navbar(
         )
       )
     )
+  ),
+  nav_panel(
+    title = "Ruang Analisis",
+    icon = icon("chart-line"),
+    
+    sidebarLayout(
+      sidebarPanel(
+        width = 3, 
+        tags$h4(tags$b("Panel Input"), style = "color: #2C3E50;"),
+        tags$hr(),
+        fileInput("file_data", "1. Unggah Data (CSV/XLSX)", accept = c(".csv", ".xlsx")),
+        uiOutput("ui_y"),
+        uiOutput("ui_x"),
+        tags$br(),
+        actionButton("run_analysis", "Jalankan Analisis", 
+                     icon = icon("play"), 
+                     class = "btn-primary", 
+                     style = "width: 100%; font-weight: bold; border-radius: 8px;")
+      ),
   )
+
