@@ -34,7 +34,7 @@ ui <- page_navbar(
         )
       )
     )
-  )
+  ),
   nav_panel(
     title = "Ruang Analisis",
     icon = icon("chart-line"),
@@ -53,3 +53,5 @@ ui <- page_navbar(
                      class = "btn-primary", 
                      style = "width: 100%; font-weight: bold; border-radius: 8px;")
       ),
+  )
+
