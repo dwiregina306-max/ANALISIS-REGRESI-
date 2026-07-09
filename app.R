@@ -272,3 +272,96 @@ server <- function(input, output, session) {
       cat("3. Anda bisa menggunakan penyesuaian 'Robust Standard Errors' (White's Correction) saat melakukan uji signifikansi koefisien secara manual.")
     }
   })
+  # 4.3 Uji Multikolinearitas + Solusi Jika Melanggar
+  output$out_multi <- renderPrint({
+    req(model_lm())
+    mod <- model_lm()
+    
+    cat("--- UJI MULTIKOLINEARITAS ---\n\n")
+    if(length(input$var_x) > 1) {
+      cat("Metode: Variance Inflation Factor (VIF)\n")
+      cat("Aturan Rentang:\n")
+      cat(" - 0 hingga 5  : Aman dari multikolinearitas\n")
+      cat(" - 5 hingga 10 : Ada indikasi multikolinearitas\n")
+      cat(" - Di atas 10  : Pasti ada multikolinearitas parah\n\n")
+      
+      vif_res <- vif(mod)
+      print(vif_res)
+      
+      # FITUR BARU: Deteksi otomatis apakah ada nilai VIF atau GVIF yang melanggar batas aman (>10)
+      any_violation <- FALSE
+      if (is.matrix(vif_res)) {
+        if ("GVIF" %in% colnames(vif_res)) {
+          if (any(vif_res[, "GVIF"] > 10)) any_violation <- TRUE
+        } else {
+          if (any(vif_res > 10)) any_violation <- TRUE
+        }
+      } else {
+        if (any(vif_res > 10)) any_violation <- TRUE
+      }
+      
+      if (any_violation) {
+        cat("\n💡 REKOMENDASI SOLUSI (ASUMSI DILANGGAR):\n")
+        cat("1. Keluarkan salah satu dari dua variabel independen (X) yang saling berkolerasi sangat kuat (yang memicu nilai VIF membengkak).\n")
+        cat("2. Gabungkan variabel-variabel X yang mirip menjadi satu skor komposit tunggal (misal lewat rata-rata atau analisis PCA).\n")
+        cat("3. Perbanyak ukuran sampel data Anda jika memungkinkan, karena penambahan data dapat membantu memisahkan efek antar variabel X.")
+      }
+      
+    } else {
+      cat("Uji VIF dilewati karena variabel independen (X) yang dipilih hanya ada satu.\n")
+    }
+  })
+  
+  # 4.4 Uji Autokorelasi + Solusi Jika Melanggar
+  output$out_auto <- renderPrint({
+    req(model_lm())
+    mod <- model_lm()
+    
+    cat("--- UJI AUTOKORELASI ---\n\n")
+    cat("Metode: Durbin-Watson Test\n")
+    cat("H0: Tidak ada autokorelasi pada residual (Aman)\n")
+    cat("H1: Terdapat autokorelasi (Bermasalah)\n\n")
+    
+    uji_dw <- dwtest(mod)
+    print(uji_dw)
+    
+    keputusan_dw <- ifelse(uji_dw$p.value > 0.05, "Gagal tolak H0", "Tolak H0")
+    interp_dw <- ifelse(uji_dw$p.value > 0.05, 
+                        "Interpretasi: Observasi independen satu sama lain. Asumsi TERPENUHI.", 
+                        "Interpretasi: Terdapat pola autokorelasi. Asumsi DILANGGAR.")
+    cat("Keputusan:", keputusan_dw, "\n")
+    cat(interp_dw, "\n")
+    
+    # FITUR BARU: Solusi bersyarat jika autokorelasi dilanggar (p-value <= 0.05)
+    if(uji_dw$p.value <= 0.05) {
+      cat("\n💡 REKOMENDASI SOLUSI (ASUMSI DILANGGAR):\n")
+      cat("1. Jika data Anda adalah deret waktu (Time Series), tambahkan variabel lag (misal Y pada t-1 atau X pada t-1) ke dalam model regresi.\n")
+      cat("2. Gunakan metode estimasi khusus deret waktu seperti prosedur Cochrane-Orcutt atau Prais-Winsten untuk membersihkan korelasi serial.\n")
+      cat("3. Ubah variabel data Anda ke dalam bentuk nilai selisih pertama (First Difference: data sekarang dikurangi data sebelumnya).")
+    }
+  })
+  
+  # 5. Diagnostic Plots
+  output$plot_resid_fit <- renderPlot({ plot(model_lm(), 1, main = "Residuals vs Fitted") })
+  output$plot_qq <- renderPlot({ plot(model_lm(), 2, main = "Normal Q-Q") })
+  output$plot_scale_loc <- renderPlot({ plot(model_lm(), 3, main = "Scale-Location") })
+  output$plot_resid_lev <- renderPlot({ plot(model_lm(), 5, main = "Residuals vs Leverage") })
+  
+  output$out_plot_interp <- renderPrint({
+    cat("--- PENJELASAN 4 PLOT DIAGNOSTIK ---\n\n")
+    cat("1. Residuals vs Fitted\n")
+    cat("Tujuan: Mengecek asumsi linearitas dan homoskedastisitas.\n")
+    cat("Kondisi Ideal: Titik titik tersebar acak tanpa membentuk pola (seperti huruf U atau corong) di sekitar garis horizontal nol.\n\n")
+    
+    cat("2. Normal Q-Q\n")
+    cat("Tujuan: Mengecek apakah residual berdistribusi normal.\n")
+    cat("Kondisi Ideal: Titik titik harus mengikuti atau menempel erat pada garis diagonal putus putus.\n\n")
+    
+    cat("3. Scale-Location\n")
+    cat("Tujuan: Pemeriksaan lanjutan untuk asumsi varians konstan (Homoskedastisitas).\n")
+    cat("Kondisi Ideal: Garis merah mendatar (horizontal) dan titik tersebar merata secara acak tanpa melebar atau menyempit di satu sisi.\n\n")
+    
+    cat("4. Residuals vs Leverage\n")
+    cat("Tujuan: Mendeteksi keberadaan outlier yang memiliki pengaruh kuat (influential points) yang dapat menarik garis regresi.\n")
+    cat("Kondisi Ideal: Tidak ada titik yang melewati garis putus putus merah (Cook's distance). Jika ada, data tersebut mengubah model secara drastis.\n")
+  })
