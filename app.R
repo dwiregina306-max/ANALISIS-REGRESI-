@@ -233,3 +233,42 @@ server <- function(input, output, session) {
       }
     }
   })
+  
+  # 4.2 Uji Heteroskedastisitas + Solusi Jika Melanggar
+  output$out_het <- renderPrint({
+    req(model_lm(), processed_data())
+    mod <- model_lm()
+    res <- resid(mod)
+    n_data <- length(res)
+    data_reg <- processed_data()$data
+    formula_reg <- as.formula(paste(input$var_y, "~", paste(input$var_x, collapse = " + ")))
+    
+    cat("--- UJI HETEROSKEDASTISITAS ---\n\n")
+    cat("H0: Ragam residual konstan (Homoskedastisitas / Aman)\n")
+    cat("H1: Ragam residual tidak konstan (Heteroskedastisitas / Bermasalah)\n\n")
+    
+    if(n_data < 1000) {
+      cat("Metode: Breusch-Pagan Test (Karena N < 1000)\n")
+      uji_het <- bptest(formula_reg, data = data_reg)
+    } else {
+      cat("Metode: White Test / Pendekatan Fitted Values (Karena N >= 1000)\n")
+      data_reg$fit_val <- fitted(mod)
+      uji_het <- bptest(formula_reg, ~ fit_val + I(fit_val^2), data = data_reg)
+    }
+    print(uji_het)
+    
+    keputusan_het <- ifelse(uji_het$p.value > 0.05, "Gagal tolak H0", "Tolak H0")
+    interp_het <- ifelse(uji_het$p.value > 0.05, 
+                         "Interpretasi: Ragam residual konstan. Model stabil (Asumsi TERPENUHI).", 
+                         "Interpretasi: Ragam residual tidak konstan. Model tidak stabil (Asumsi DILANGGAR).")
+    cat("Keputusan:", keputusan_het, "\n")
+    cat(interp_het, "\n")
+    
+    # FITUR BARU: Solusi bersyarat jika heteroskedastisitas dilanggar (p-value <= 0.05)
+    if(uji_het$p.value <= 0.05) {
+      cat("\n💡 REKOMENDASI SOLUSI (ASUMSI DILANGGAR):\n")
+      cat("1. Lakukan transformasi Logaritma Natural pada variabel Y (mengubah Y menjadi Ln_Y) untuk menstabilkan varians (ragam) residual.\n")
+      cat("2. Gunakan metode estimasi WLS (Weighted Least Squares / Kuadrat Terkecil Terbobot) alih-alih OLS standar.\n")
+      cat("3. Anda bisa menggunakan penyesuaian 'Robust Standard Errors' (White's Correction) saat melakukan uji signifikansi koefisien secara manual.")
+    }
+  })
