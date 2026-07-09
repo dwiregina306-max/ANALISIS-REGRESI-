@@ -365,3 +365,151 @@ server <- function(input, output, session) {
     cat("Tujuan: Mendeteksi keberadaan outlier yang memiliki pengaruh kuat (influential points) yang dapat menarik garis regresi.\n")
     cat("Kondisi Ideal: Tidak ada titik yang melewati garis putus putus merah (Cook's distance). Jika ada, data tersebut mengubah model secara drastis.\n")
   })
+  
+  # 6. Output Regresi
+  output$out_regresi <- renderPrint({
+    req(model_lm())
+    mod <- model_lm()
+    data_reg <- processed_data()$data
+    y_aktual <- data_reg[[input$var_y]]
+    
+    cat("--- OUTPUT REGRESI (RINGKASAN R) ---\n")
+    print(summary(mod))
+    cat("\n------------------------------------------------------\n\n")
+    
+    # Hitung Statistik PRESS
+    res <- resid(mod)
+    lev <- hatvalues(mod)
+    pr <- res / (1 - lev) 
+    PRESS <- sum(pr^2)
+    
+    TSS <- sum((y_aktual - mean(y_aktual))^2)
+    R2_pred <- 1 - (PRESS / TSS)
+    sum_mod <- summary(mod)
+    
+    cat("--- METRIK PREDIKSI LANJUTAN (EVALUASI MODEL) ---\n\n")
+    cat("Nilai Statistik PRESS  :", PRESS, "\n")
+    cat("Multiple R-squared     :", round(sum_mod$r.squared, 4), "\n")
+    cat("Adjusted R-squared     :", round(sum_mod$adj.r.squared, 4), "\n")
+    cat("Predicted R-squared    :", round(R2_pred, 4), " (Nilai R-Square dari perhitungan PRESS)\n")
+  })
+  
+  # 7. Interpretasi Model
+  output$out_model_interpretasi <- renderPrint({
+    req(model_lm())
+    mod <- model_lm()
+    sum_mod <- summary(mod)
+    coef_mat <- sum_mod$coefficients
+    
+    cat("--- INTERPRETASI MODEL REGRESI SECARA STATISTIK ---\n\n")
+    
+    # Persamaan Estimasi Model
+    cat("1. PERSAMAAN REGRESI ESTIMASI:\n")
+    vars <- rownames(coef_mat)
+    est <- round(coef_mat[, "Estimate"], 4)
+    
+    eq_text <- paste0(input$var_y, " = ", est[1])
+    if(length(est) > 1){
+      for(i in 2:length(est)){
+        sign_char <- ifelse(est[i] >= 0, " + ", " - ")
+        eq_text <- paste0(eq_text, sign_char, abs(est[i]), " * (", vars[i], ")")
+      }
+    }
+    cat(eq_text, "\n\n")
+    cat("----------------------------------------------------------------------\n\n")
+    
+    # Uji t
+    cat("2. PEMBUKTIAN STATISTIK PARSIAL (UJI T & P-VALUE):\n")
+    cat("Aturan Dasar: Jika P-Value < 0.05, maka variabel TERBUKTI SECARA STATISTIK berpengaruh nyata.\n\n")
+    
+    cat(sprintf("[Konstanta / Intercept] = %s\n", est[1]))
+    cat(sprintf("  * Keterangan    : Nilai dasar variabel %s tanpa pengaruh variabel X.\n\n", input$var_y))
+    
+    if(length(est) > 1){
+      for(i in 2:length(est)){
+        p_val <- coef_mat[i, "Pr(>|t|)"]
+        arah <- ifelse(est[i] >= 0, "POSITIF", "NEGATIF")
+        
+        if(p_val < 0.05) {
+          status_statistika <- "TERBUKTI SECARA STATISTIK berpengaruh nyata/signifikan pada tingkat kepercayaan 95%."
+        } else {
+          status_statistika <- "TIDAK TERBUKTI SECARA STATISTIK memiliki pengaruh signifikan (efeknya bisa jadi karena kebetulan)."
+        }
+        
+        cat(sprintf("[%s] -> Koefisien Efek: %s\n", vars[i], est[i]))
+        cat(sprintf("  * P-Value       : %s\n", round(p_val, 5)))
+        cat(sprintf("  * Kesimpulan R  : %s\n", status_statistika))
+        cat(sprintf("  * Arah Hubungan : %s\n", arah))
+        cat(sprintf("  * Narasi        : Setiap kenaikan 1 satuan nilai pada [%s], maka variabel [%s]\n", vars[i], input$var_y))
+        cat(sprintf("                    akan %s sebesar %s satuan (dengan asumsi variabel lain tetap).\n\n", 
+                    ifelse(est[i] >= 0, "meningkat", "menurun"), abs(est[i])))
+      }
+    }
+    cat("----------------------------------------------------------------------\n\n")
+    
+    # Uji F
+    cat("3. INTERPRETASI KELAYAKAN MODEL SECARA SIMULTAN (UJI F):\n")
+    cat("Aturan Dasar: Menguji apakah seluruh variabel X secara bersama-sama memengaruhi Y.\n\n")
+    f_stat <- sum_mod$fstatistic
+    if(!is.null(f_stat)){
+      p_f_val <- pf(f_stat[1], f_stat[2], f_stat[3], lower.tail = FALSE)
+      cat(sprintf("  * Nilai F-Statistic : %s\n", round(f_stat[1], 4)))
+      cat(sprintf("  * P-Value Uji F     : %s\n", round(p_f_val, 5)))
+      
+      if(p_f_val < 0.05){
+        cat("  * Kesimpulan Simultan: TERBUKTI SECARA STATISTIK bahwa seluruh variabel independen\n")
+        cat("                         secara bersama-sama (simultan) memiliki pengaruh nyata terhadap Y.\n")
+        cat("                         Dengan demikian, model regresi ini LAYAK dan VALID untuk digunakan.\n")
+      } else {
+        cat("  * Kesimpulan Simultan: TIDAK TERBUKTI SECARA STATISTIK bahwa kombinasi variabel independen\n")
+        cat("                         memiliki pengaruh signifikan terhadap Y. Model TIDAK LAYAK.\n")
+      }
+    }
+  })
+  
+  # 8. R-Square PRESS
+  output$out_rsquare_press <- renderPrint({
+    req(model_lm())
+    mod <- model_lm()
+    data_reg <- processed_data()$data
+    y_aktual <- data_reg[[input$var_y]]
+    
+    res <- resid(mod)
+    lev <- hatvalues(mod)
+    pr <- res / (1 - lev) 
+    PRESS <- sum(pr^2)
+    TSS <- sum((y_aktual - mean(y_aktual))^2)
+    R2_pred <- 1 - (PRESS / TSS)
+    
+    cat("--- ANALISIS KEKUATAN MODEL BERDASARKAN R-SQUARE PRESS ---\n\n")
+    cat(sprintf("  * Nilai Predicted R-Square (dari PRESS) : %s\n", round(R2_pred, 4)))
+    cat(sprintf("  * Presentase Variasi Terjelaskan        : %s%%\n\n", round(R2_pred * 100, 2)))
+    
+    cat("INTERPRETASI NILAI:\n")
+    cat(sprintf("Artinya, sebesar %s%% variasi naik atau turunnya nilai variabel [%s]\n", round(R2_pred * 100, 2), input$var_y))
+    cat(sprintf("DAPAT DIJELASKAN oleh model regresi yang dibentuk saat memprediksi data baru.\n"))
+    cat(sprintf("Sedangkan sisanya sebesar %s%% dijelaskan oleh variasi faktor lain di luar model.\n\n", round((1 - R2_pred) * 100, 2)))
+    
+    cat("----------------------------------------------------------------------\n\n")
+    cat("ALASAN ILMIAH KENAPA HARUS MENGGUNAKAN R-SQUARE PRESS (PREDICTED R-SQUARE):\n\n")
+    cat("1. Menghindari Jebakan Overfitting (Model Terlalu Optimis)\n")
+    cat("   R-Square biasa (Multiple R2) memiliki kelemahan di mana nilainya AKAN SELALU NAIK\n")
+    cat("   atau tetap setiap kali kita menambahkan variabel independen baru, tidak peduli apakah\n")
+    cat("   variabel itu penting atau hanya sampah/kebetulan. Ini membuat kita sering terjebak\n")
+    cat("   menganggap model kita sangat bagus di data internal, padahal sebenarnya 'Overfitting'.\n\n")
+    
+    cat("2. Simulasi Pengujian Data Riil / Baru (Out-of-Sample)\n")
+    cat("   R-Square dari statistik PRESS dihitung menggunakan metode 'Leave-One-Out Cross Validation'.\n")
+    cat("   Sistem akan menghapus 1 baris data, membuat model dari data yang tersisa, lalu menguji\n")
+    cat("   model tersebut untuk memprediksi 1 baris data yang dihapus tadi. Proses ini diulang\n")
+    cat("   pada semua baris data.\n\n")
+    
+    cat("3. Kesimpulan Objektivitas\n")
+    cat("   Jika nilai R-Square PRESS jauh lebih rendah daripada R-Square model biasa, itu adalah\n")
+    cat("   tanda bahaya bahwa model Anda terlalu banyak memasukkan variabel yang tidak penting.\n")
+    cat("   R-Square PRESS mengukur kemampuan prediksi SEBENARNYA jika model diaplikasikan pada dunia nyata.\n")
+  })
+}
+
+# --- RUN APP ---
+shinyApp(ui = ui, server = server)
