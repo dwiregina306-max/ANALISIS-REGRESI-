@@ -99,3 +99,82 @@ ui <- page_navbar(
     )
   )
 )
+# ==========================================
+# 2. SERVER LOGIC
+# ==========================================
+server <- function(input, output, session) {
+  
+  # 1. Membaca Data (Kompatibel untuk CSV & XLSX)
+  raw_data <- reactive({
+    req(input$file_data)
+    ext <- tolower(tools::file_ext(input$file_data$name)) 
+    
+    if (ext == "csv") {
+      df <- read.csv(input$file_data$datapath)
+    } else if (ext == "xlsx") {
+      df <- as.data.frame(read_excel(input$file_data$datapath)) 
+    } else {
+      stop("Format file tidak didukung. Gunakan CSV atau XLSX.")
+    }
+    return(df)
+  })
+  
+  # 2. UI Dinamis (DENGAN FILTER NUMERIK)
+  output$ui_y <- renderUI({
+    req(raw_data())
+    data_num <- raw_data() %>% select(where(is.numeric))
+    selectInput("var_y", "Pilih Variabel Dependen (Y) [Hanya Numerik]:", choices = names(data_num))
+  })
+  
+  output$ui_x <- renderUI({
+    req(raw_data())
+    selectInput("var_x", "Pilih Variabel Independen (X):", choices = names(raw_data()), multiple = TRUE)
+  })
+  
+  # 3. Preprocessing Data
+  processed_data <- eventReactive(input$run_analysis, {
+    req(raw_data(), input$var_y, input$var_x)
+    
+    df <- raw_data()[, c(input$var_y, input$var_x), drop = FALSE]
+    n_awal <- nrow(df)
+    
+    na_rows <- which(!complete.cases(df))
+    df_nona <- na.omit(df)
+    
+    Q1 <- quantile(df_nona[[input$var_y]], 0.25)
+    Q3 <- quantile(df_nona[[input$var_y]], 0.75)
+    IQR_val <- Q3 - Q1
+    lower_bound <- Q1 - 1.5 * IQR_val
+    upper_bound <- Q3 + 1.5 * IQR_val
+    
+    outlier_rows <- which(df_nona[[input$var_y]] < lower_bound | df_nona[[input$var_y]] > upper_bound)
+    df_clean <- df_nona
+    if(length(outlier_rows) > 0) {
+      df_clean <- df_nona[-outlier_rows, ]
+    }
+    
+    log_text <- paste(
+      "--- LAPORAN PREPROCESSING DATA ---\n",
+      "Jumlah data awal:", n_awal, "baris\n\n",
+      "1. Penanganan Missing Value:\n",
+      "- Tindakan: Menghapus baris yang mengandung nilai kosong (NA).\n",
+      "- Baris yang dihapus:", ifelse(length(na_rows) > 0, paste(na_rows, collapse = ", "), "Tidak ada"), "\n\n",
+      "2. Penanganan Outlier Ekstrem (Metode IQR pada Variabel Dependen):\n",
+      "- Tindakan: Menghapus nilai di luar batas [", round(lower_bound, 2), ",", round(upper_bound, 2), "]\n",
+      "- Baris yang terindikasi dan dihapus:", ifelse(length(outlier_rows) > 0, paste(outlier_rows, collapse = ", "), "Tidak ada"), "\n\n",
+      "Jumlah data akhir siap dianalisis:", nrow(df_clean), "baris"
+    )
+    
+    list(data = df_clean, log = log_text)
+  })
+  
+  output$out_preprocessing <- renderPrint({
+    cat(processed_data()$log)
+  })
+  
+  # Membuat Model Regresi
+  model_lm <- reactive({
+    data_reg <- processed_data()$data
+    formula_reg <- as.formula(paste(input$var_y, "~", paste(input$var_x, collapse = " + ")))
+    lm(formula_reg, data = data_reg)
+  })
