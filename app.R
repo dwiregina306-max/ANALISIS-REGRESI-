@@ -53,3 +53,49 @@ ui <- page_navbar(
                      class = "btn-primary", 
                      style = "width: 100%; font-weight: bold; border-radius: 8px;")
       ),
+      
+      mainPanel(
+        width = 9,
+        navset_card_underline(
+          title = tags$b("Output Analisis"),
+          
+          # 1. Preprocessing
+          nav_panel("Preprocessing", verbatimTextOutput("out_preprocessing")),
+          
+          # 2. Uji Asumsi (Rekomendasi Solusi akan muncul di sini jika melanggar)
+          nav_panel("Uji Asumsi", 
+                    br(),
+                    navset_pill( 
+                      nav_panel("1. Normalitas", verbatimTextOutput("out_norm")),
+                      nav_panel("2. Heteroskedastisitas", verbatimTextOutput("out_het")),
+                      nav_panel("3. Multikolinearitas", verbatimTextOutput("out_multi")),
+                      nav_panel("4. Autokorelasi", verbatimTextOutput("out_auto"))
+                    )
+          ),
+          
+          # 3. Diagnostik Plot
+          nav_panel("Diagnostic Plots", 
+                    br(),
+                    fluidRow(
+                      column(6, card(full_screen = TRUE, plotOutput("plot_resid_fit"))),
+                      column(6, card(full_screen = TRUE, plotOutput("plot_qq"))),
+                      column(6, card(full_screen = TRUE, plotOutput("plot_scale_loc"))),
+                      column(6, card(full_screen = TRUE, plotOutput("plot_resid_lev")))
+                    ),
+                    br(),
+                    verbatimTextOutput("out_plot_interp")
+          ),
+          
+          # 4. Output Regresi
+          nav_panel("Output Regresi", verbatimTextOutput("out_regresi")),
+          
+          # 5. Interpretasi Model
+          nav_panel("Interpretasi Model", verbatimTextOutput("out_model_interpretasi")),
+          
+          # 6. R-Square PRESS
+          nav_panel("R-Square PRESS", verbatimTextOutput("out_rsquare_press"))
+        )
+      )
+    )
+  )
+)
