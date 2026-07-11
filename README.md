@@ -1,7 +1,6 @@
 # ANALISIS-REGRESI-
 
-**Tautan Aplikasi R Shiny (Live):
-** [](https://statisticsunj.shinyapps.io/ANALISIS-REGRESI-/)]
+**Tautan Aplikasi R Shiny (Live):** https://statisticsunj.shinyapps.io/ANALISIS-REGRESI-/
 
 ---
 
